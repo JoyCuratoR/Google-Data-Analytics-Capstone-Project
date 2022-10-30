@@ -1,0 +1,446 @@
+---
+title: "Case Study: Radiant Energy's Partner Program"
+author: "Tori-Ann Cheung"
+date: "2022-10-28"
+output:
+  html_document: 
+    theme: readable
+    highlight: monochrome
+    toc: yes
+---
+```{r setup, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+
+
+For the last course of Google's Data Analytics Certificate Program, there's an optional capstone project that student's can do. This capstone project has two pathways: analyze a given dataset and business task, or create your own from scratch. 
+
+I chose to create my own project and analyze the [Environmental Protection Agency's (EPA)](https://www.epa.gov) Green House Gas Emissions data, and **problem designed a fictional non-profit organization called Radiant Energy** who's mission is to help facilities lower their emissions output.
+
+## The Google Pathway Scenario
+*Taken from Follow Your Own Case Study Path PDF instructions.*
+
+"You are a junior data analyst working for a business intelligence consultant. You have been at your job for six months, and your boss feels you are ready for more responsibility. He has asked you to lead a project for a brand new client — this will involve everything from defining the business task all the way through presenting your data-driven recommendations. You will choose the topic, ask the right questions, identify a fresh dataset and ensure its integrity, conduct analysis, create compelling data visualizations, and prepare a presentation."
+
+## Radiant Energy's Background
+Radiant Energy is partnered with several high emission-producing facilities to help reduce their output of emissions. Every month these partners send Radiant their reports on the amount of emissions their facilities generated. Radiant asked their partners for permission to share their emissions data with Radiant Energy's donors, most agreed, however some refused - which is shown in the dataset as NAs.
+
+### Partners Program Background
+**SMART Goal**
+
+The Partners Program goal for 2020 was to decrease partnered facilities' emissions by 10% from the 2019 reported emissions.
+
+**Partnered Facilities Locations** 
+
+*New York:* New York county, Bronx county, Queens county, Kings county, Richmond county
+
+*California:* Orange County, Los Angeles county, Riverside county, Sacramento county, San Francisco county 
+
+*Texas:* Travis county
+
+*Washington:* King county
+
+*Tennessee:* Davidson county
+
+## Business Task
+Analyze Radiant Energy's Partners Program data to determine which areas of the program are and aren't performing well in, and provide recommendations to increase efficiency of the program's operations. 
+
+## Questions
+1. How many facilities in each state reached the Partners Program's SMART goal? 
+
+2. Which facility decreased the most amount of emissions?  
+
+3. Which facility decreased the least amount of emissions?
+
+4. Aggregating all facilities in the same states, which states have the highest sum percent of emissions decreased and increased?
+
+5. Aggregating all facilities in the same sectors, which sectors have the highest sum percent of emissions decrease and increased?
+
+6. Of the facility that produced the highest amount of emissions in 2019, what percent has it decreased or increased in 2020?  
+
+7. What is the average percent of emissions decreased from facilities that produced less emissions in 2020 than 2019? 
+
+8. What is the max and min percent of emissions decreased from facilities that produced less emissions in 2020 than 2019?
+
+## Approach
+
+My first instinct is to give the dataset a perfunctory glance through, and note the kind of data that's within. At the same time, I'm also taking notes of any messy data.
+
+With questions that help complete the business task established beforehand, I began transforming the dataset, using data constraints, checking for duplicates, and excluding any irrelevant data. This is where MySQL came in handy. 
+
+## Analysis
+
+```{r, echo = TRUE}
+library(tidyverse)
+```
+
+To analyze the dataset, I made use of RStudio for two reasons: I wanted to demonstrate data manipulation with the R packages ``tidyverse`` and create a HTML data report using R Markdown. From the initial exploration and cleaning, I got a thorough understanding of how to answer the business task questions.
+
+### The Dataset 
+```{r, echo = TRUE}
+df <- read_csv("D:/R_Studio/Project_Vault/OP_GHGE/data/PartneredFacilities.csv")
+df$Emissions2019 <- as.numeric(as.character((df$Emissions2019)))
+df$Emissions2020 <- as.numeric(as.character((df$Emissions2020)))
+df <- df |>
+  mutate(Goal = round(((df$Emissions2020 - df$Emissions2019) / df$Emissions2019) * 100, digits = 2))
+df <- df %>%
+  mutate(YesNo = case_when(Goal <= - 10 ~ "1", TRUE ~ "0"))
+df <- df |> 
+  mutate(PosNegNum = case_when(Goal < 0 ~ "0", TRUE ~ "1"))
+  
+df$YesNo <- as.numeric(as.character(df$YesNo))
+
+df$PosNegNum <- as.numeric(as.character(df$PosNegNum))
+```
+
+### Additional Columns 
+In order to answer the first part of the business task: determine which areas of the program are and aren't performing well in, I had to create a formula that calculates percentage decrease by taking total 2020 emissions column subtracting it by total 2019 emissions column, then dividing by total 2019 emissions column and multiply it by 100. 
+
+
+```r
+df <- df |>
+  mutate(Goal = round(((df$Emissions2020 - df$Emissions2019) / df$Emissions2019) * 100, digits = 2))
+```
+
+Then to make visualizing easier, I also added a column that answers 'yes or no' (represented by 1 and 0 respectively) if each facility in the dataset reached the Partners Program's goal, regardless of the amount percentage of emissions they decreased or increased between 2019 and 2020. 
+
+ 
+```r
+df <- df %>%
+  mutate(YesNo = case_when(Goal <= - 10 ~ "1", TRUE ~ "0"))
+```
+
+Lastly, I created a column to identify in each row if it's Goal column returned a negative or positive number. 
+
+```r
+df <- df |> 
+  mutate(PosNegNum = case_when(Goal < 0 ~ "0", TRUE ~ "1"))
+  
+df$YesNo <- as.numeric(as.character(df$YesNo))
+
+df$PosNegNum <- as.numeric(as.character(df$PosNegNum))
+```
+
+
+### Visualizing {.tabset}
+
+#### Question 1 {.tabset}
+**Answering the Question:** How many facilities in each state reached the Partners Program's SMART goal? 
+
+**Result:** California has the most facilities that both met and did not meet the 2020 goal. Tennessee and Washington tied in having only one facility meeting the 2020 goal.
+
+```{r, echo = FALSE}
+plot(df |> 
+  select(State, YesNo) |>
+  count(YesNo, State) |>
+  ggplot(aes(x = State, y = n, fill = factor(YesNo))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs( y = "Number of Facilities",
+        title = "Partnered Facilities that Met the Partner Program's Goal") +
+  guides(fill = guide_legend(title = "Met the Goal")) +
+  ylim(0, 100) +
+  scale_fill_manual(values = c("gray80", "gold"),
+                    labels = c('No', 'Yes'))
+                    )
+```
+
+#### Question 2
+**Answering the Question:** Which facility decreased the most amount of emissions? 
+
+**Result:** Facility 1010345, Olam West Coast Inc in California decreased 97.6% of emissions between 2019-2020.
+
+```r
+    Facility Id  Industry Sectors   Percent Decreased
+      1010345        Other               -97.6%
+```
+
+#### Question 3
+**Answering the Question:** Which facility decreased the least amount of emissions?
+
+**Result:** Facility 1006873, University of California - Irvine in California decreased 0.207% of emissions between 2019-2020.
+```r
+	 Facility Id  IndustryTypeSectors   Percent Decreased
+     1006873         Other                 -0.207%
+```
+
+#### Question 4
+**Answering the Question:** Aggregating all facilities in the same states, which states have the highest percent of emissions decreased and increased?
+
+
+```{r, echo = FALSE}
+State <- df |> 
+  group_by(State) |>
+  summarize(Neg = sum(Goal[which(Goal < 0)], na.rm = TRUE),
+            Pos = sum(Goal[which(Goal > 0)], na.rm = TRUE)) |>
+  mutate(Highlight = ifelse(Pos == 358.79, "yes", "no")) |>
+  mutate(Highlight = ifelse(Neg == -730.71, "yes", "no"))
+```
+
+
+```{r, echo = FALSE}
+plot(ggplot(State, aes(x = reorder(State, -Neg), y = Neg, fill = Highlight)) +
+  geom_bar(stat = "identity") +
+  ylim(- 800, 400) +
+  geom_hline(yintercept = 0) +
+  geom_text(aes(label = Neg), vjust = 2, parse = T) +
+  labs(x = "State", y = "Percent", 
+       title = "Sum Percent of Emissions Decreased by State",
+       subtitle = "Between 2019-2020") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values =  c("yes" = "gold", "no" = "gray80"), guide = "none")
+  )
+```
+
+
+```{r, echo = FALSE}
+plot(ggplot(State, aes(x = reorder(State, - Pos), y = Pos, fill = Highlight)) +
+  geom_bar(stat = "identity") +
+  ylim(- 800, 400) +
+  geom_hline(yintercept = 0) +
+  geom_text(aes(label = Pos), vjust = -1) +
+  labs(x = "State", y = "Percent", 
+       title = "Sum Percent of Emissions Increased by State",
+       subtitle = "Between 2019-2020") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values =  c("yes" = "gold", "no" = "gray80"), guide = "none")
+
+)
+```
+
+#### Question 4.1
+**Additional Question:** What is the sum percent of emissions decreased and increased by county?
+
+```{r, echo=FALSE}
+County <- df |> 
+  group_by(County) |>
+  summarize(Neg = round(sum(Goal[which(Goal < 0)], na.rm = TRUE)),
+            Pos = round(sum(Goal[which(Goal > 0)], na.rm = TRUE))) |>
+  arrange(County) |>
+  mutate(Highlight = ifelse(Neg == -377, "yes", "no")) |>
+  mutate(Highlight2 = ifelse(Pos == 197, "yes", "no"))
+```
+
+
+```{r, echo = FALSE}
+plot(County |>
+  ggplot(aes(x = County, y = Neg,
+             fill = Highlight)) +
+  geom_col() +
+  coord_flip() +
+  geom_hline(yintercept = 0) +
+  ylim(-400, 250) +
+  scale_x_discrete() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values =  c("yes" = "gold", "no" = "gray80"), guide = "none") +
+  labs(x = "County", y = "Percent Decreased") + 
+  geom_text(aes(label = ifelse(Neg == "-377", "-377", "")), 
+            vjust = 0.5, hjust = -1, color = "black")
+
+)
+```
+
+
+```{r, echo = FALSE}
+plot(County |>
+  ggplot(aes(x = County, y = Pos,
+             fill = Highlight2)) +
+  geom_col() +
+  coord_flip() +
+  geom_hline(yintercept = 0) +
+  ylim(-400, 250) +
+  scale_x_discrete() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values =  c("yes" = "gold", "no" = "gray80"), guide = "none") +
+  labs(x = "County", y = "Percent Increased") + 
+  geom_text(aes(label = ifelse(Pos == "197", "197", "")), 
+            vjust = 0.5, hjust = 2, color = "black")
+
+)
+```
+
+
+#### Question 5
+**Answering the Question:** Aggregating all facilities in the same sectors, which sectors have the highest sum percent of emissions decreased and increased?
+
+
+```{r, echo = FALSE}
+Sector <- df |> 
+  group_by(IndustryTypeSectors) |>
+  summarize(Neg = round(sum(Goal[which(Goal < 0)], na.rm = TRUE)),
+            Pos = round(sum(Goal[which(Goal > 0)], na.rm = TRUE))) |>
+  mutate(Highlight = ifelse(Neg == -398, "yes", "no")) |>
+  mutate(Highlight2 = ifelse(Pos == 375, "yes", "no"))
+```
+
+
+```{r, echo = FALSE}
+plot(Sector |>
+  filter(!is.na(Neg)) |>
+  ggplot(aes(x = IndustryTypeSectors, y = Neg,
+             fill = Highlight)) +
+  geom_col() +
+  coord_flip() +
+  geom_hline(yintercept = 0) +
+  ylim(-400, 400) +
+  scale_x_discrete() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values =  c("yes" = "gold", "no" = "gray80"), guide = "none") +
+  labs(title = "Sum Percent of \nEmissions Decreased",
+       subtitle = "By Sector between 2019-2020",
+       x = "Sector", y = "Percent Decreased") +
+  geom_text(aes(label = ifelse(Neg == "-398", "-398", "")), 
+            vjust = 0.5, hjust = -0.3, color = "black")
+  )
+```
+
+
+```{r, echo = FALSE}
+plot(Sector |>
+  filter(!is.na(Neg)) |>
+  ggplot(aes(x = IndustryTypeSectors, y = Pos,
+             fill = Highlight2)) +
+  geom_col() +
+  coord_flip() +
+  geom_hline(yintercept = 0) +
+  ylim(-400, 400) +
+  scale_x_discrete() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values =  c("yes" = "gold", "no" = "gray80"), guide = "none") +
+  labs(x = "Sector", y = "Percent Increased",
+       title = "Sum Percent of \nEmissions Increased",
+       subtitle = "By Sector between 2019-2020") + 
+  geom_text(aes(label = ifelse(Pos == "375", "375", "")), 
+          vjust = 0.5, hjust = 1.2, color = "black")
+
+)
+```
+
+
+#### Question 6
+**Answering the Question**: Of the facility that produced the highest amount of emissions in 2019, what percent has it decreased or increased in 2020? 
+
+**Result**: Facility 1006627, Los Angeles Refinery in California decreased 5.06% of emissions in 2020.
+
+```r
+	Facility Id  2019 Emissions   Percent of Emissions
+	               (in tons)           
+    1006627      5 948 168.           -5.06%
+
+```
+
+#### Question 7
+**Answering the Question:** What is the average percent of emissions decreased from facilities that produced less emissions in 2020 than 2019? 
+
+
+```r
+  Avgerage Percent Decreased
+           -15.5%
+```
+
+#### Question 7.1
+**Additional Question:** What is the average percent of emissions decreased and increased by state?
+
+```{r, echo = FALSE}
+Avg_state <- df |> 
+  group_by(State) |>
+  summarize(Neg = round(mean(Goal[which(Goal < 0)], na.rm = TRUE), digits = 2),
+            Pos = round(mean(Goal[which(Goal > 0)], na.rm = TRUE), digits = 2)) |>
+              mutate(Highlight2 = ifelse(Pos == 40.83, "yes", "no")) |>
+              mutate(Highlight = ifelse(Neg == -17.35, "yes", "no"))
+```
+
+
+```{r, echo = FALSE}
+plot(Avg_state |>
+  ggplot(aes(x = reorder(State, -Neg), y = Neg, fill = Highlight)) +
+  geom_bar(stat = "identity") +
+  ylim(-50, 50) +
+  geom_hline(yintercept = 0) +
+  geom_text(aes(label = Neg), vjust = 2, color = "black") +
+  labs(x = "State", y = "Average Percent", 
+       title = "Average Percent of Emissions Decreased by State",
+       subtitle = "Between 2019-2020") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values =  c("yes" = "gold", "no" = "gray80"), guide = "none")
+
+  )
+```
+
+
+```{r, echo = FALSE}
+plot(Avg_state|>
+  ggplot(aes(x = reorder(State, -Pos), y = Pos, fill = Highlight2)) +
+  geom_bar(stat = "identity") +
+  ylim(-50, 50) +
+  geom_hline(yintercept = 0) +
+  geom_text(aes(label = Pos), vjust = -1, color = "black") +
+  labs(x = "State", y = "Average Percent", 
+       title = "Average Percent of Emissions Increased by State",
+       subtitle = "Between 2019-2020") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values =  c("yes" = "gold", "no" = "gray80"), guide = "none")
+  )
+```
+
+
+#### Question 8
+**Answering the Question:** What is the max and min percent of emissions decreased from facilities that produced less emissions in 2020 than 2019? 
+
+
+```r
+Min Percent Decreased
+       -0.21%
+```
+
+```r
+Max Percent Decreased
+       -97.6%
+```
+
+
+
+## Summary {.tabset}
+### What has Decreased the Most?
+Sectors: Others
+
+States: CA
+
+County: Los Angeles
+
+### What has Increased the Most? 
+Sectors: Waste 
+
+States: CA
+
+County: Orange
+
+## Recommendations
+Based on the data given, this analysis can only demonstrate a descriptive analysis of the Partners Program, and thus more data is needed to perform a diagnostic analysis. 
+
+To improve operational success, here are three recommended actions to take.
+
+**Action 1**
+
+Analyze each regional team's performance and success output to understand where and how drawbacks are occurring. Perform separate analyses on a well-performing team and an under-performing team to compare and contrast elements that are and aren't working. Then use these results to reform consulting and operation strategies.
+
+**Action 2**
+
+Lower the Partners Program goal; while not an optimal amount of partnered facilities reached the 2020 goal, however, 64.29% of partnered facilities (excluding the ones that have NAs) decreased at least 1 percent and 47.62% of partnered facilities decreased at least 5 percent.
+
+**Action 3**
+
+Scale back resources to focus on facilities in one or two states/counties at a time. Overall, California and New York are the top two states that decreased the most emissions yet are also in the top three states that increased the most emissions in 2020 as well.
+
+~
+
+~
+
+~
+```{r}
+sessionInfo()
+```
